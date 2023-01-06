@@ -1,0 +1,481 @@
+---
+title: "ICPhs analysis"
+date: "Jan 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd("/Users/marcofonseca/Library/Mobile Documents/com~apple~CloudDocs/Phonetica/analysis")
+
+library(lme4)
+library(ggplot2)
+library(afex)
+#library(lsmeans)
+library(emmeans)
+
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir="/Users/marcofonseca/Library/Mobile Documents/com~apple~CloudDocs/Phonetica/analysis")
+```
+Reading data. 
+```{r}
+
+d= read.csv('matrix.csv', header=T)
+str(d)
+d$answer = as.factor(d$answer)
+d$item = as.factor(d$item)
+
+#separating online and in person. 
+first = subset(d, experimentType != "online")
+second = subset(d, experimentType == "online")
+
+#separating into abx, lex, L2.
+abx = subset(second, expName=="abx")
+lex = subset(second, expName=="lex")
+l2 = subset(second, language="l2")
+
+```
+Inferential stats for the ABX (reaction time, not shown in the paper).
+
+```{r}
+
+st_dev = sd(abx$rt)
+avg = mean(abx$rt)
+upper_bound = avg + 2*st_dev 
+lower_bound = avg - 2*st_dev
+abx_trimmed = subset(abx, answer == "1")
+abx_trimmed = subset(abx_trimmed, abx_trimmed$rt < upper_bound)
+
+#checking random effects
+#reg_abx = lmer(rt~language*contrast  + (language*contrast|participant) + (language*contrast|item),  data=abx_trimmed)# did not converge
+#reg_abx = lmer(rt~language*contrast  + (language+contrast|participant) + (language*contrast|item),  data=abx_trimmed)
+#reg_abx = lmer(rt~language*contrast  + (language+contrast|participant) + (language+contrast|item),  data=abx_trimmed)
+reg_abx = lmer(rt~language*contrast  + (1|participant) + (1|item),  data=abx_trimmed)
+
+mixed(reg_abx, abx_trimmed)
+
+emm_options(lmerTest.limit = 4560)
+emm_options(disable.pbkrtest = 4560)
+emmeans(reg_abx, list(pairwise~contrast))
+
+```
+Inferential stats for the lexical recognition (reaction time, not shown in the paper).
+
+```{r}
+
+
+lex_trimmed = subset(lex, answer == "1")
+lex_trimmed = subset(lex, lex_trimmed$rt < upper_bound)
+lex_trimmed = subset(lex, lex$rt < upper_bound)
+
+
+#reg_lex = lmer(rt~language*contrast + (language*contrast|participant) + (language*contrast|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (language*contrast|participant) + (language*contrast|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (language+contrast|participant) + (language+contrast|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (language|participant) + (language+contrast|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (language|participant) + (language+contrast|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (language|participant) + (language|item),  data=lex_trimmed)
+
+#reg_lex = lmer(rt~language*contrast + (1|participant) + (language|item),  data=lex_trimmed)
+
+reg_lex = lmer(rt~language*contrast + (1|participant) + (1|item),  data=lex_trimmed) # converged
+
+mixed(reg_lex, lex_trimmed)
+emmeans(reg_lex, pairwise~language*contrast)
+
+```
+
+Logistic regression for the ABX (shown in the paper). 
+
+```{r}
+
+
+#log_reg_abx = glmer(answer~language*contrast + (language*contrast|participant) + (language*contrast|item),  data=abx, family=binomial) 
+#log_reg_abx = glmer(answer~language*contrast + (language+contrast|participant) + (language*contrast|item),  data=abx, family=binomial) 
+#log_reg_abx = glmer(answer~language*contrast + (language|participant) + (language+contrast|item),  data=abx, family=binomial) 
+#log_reg_abx = glmer(answer~language*contrast + (language|participant) + (language|item),  data=abx, family=binomial) 
+
+log_reg_abx = glmer(answer~language*contrast + (1|participant) + (1|item),  data=abx, family=binomial) 
+
+mixed(log_reg_abx,  abx, method="LRT", family=binomial)
+emmeans(log_reg_abx, pairwise~language*contrast)
+```
+Logistic regression for the lexical recognition task (shown in the paper). 
+
+```{r}
+
+#log_reg_lex = glmer(answer~language*contrast + (language|participant) + (language|item),  data=lex, family=binomial) 
+log_reg_lex = glmer(answer~language*contrast + (1|participant) + (1|item),  data=lex, family=binomial) 
+mixed(log_reg_lex,  lex, method="LRT", family=binomial)
+emmeans(log_reg_lex, list(pairwise~language*contrast))
+```
+
+Descriptive stats. 
+
+```{r}
+l2_first = subset(first, language == "l2")
+l2_first_abx = subset(l2_first, expName == "abx")
+l2_first_lex = subset(l2_first, expName == "lex")
+
+
+l2_first_abx_r = subset(l2_first_abx, answer == "1")
+avg = mean(l2_first_abx_r$rt)
+stdvar = sd(l2_first_abx_r$rt)
+upper_bound_pilot = avg + 2*stdvar
+lower_bound_pilot = avg - 2*stdvar
+l2_first_abx_r = subset(l2_first_abx_r, rt < upper_bound_pilot)
+nrow(l2_first_abx_r)
+
+l2_first_abx_a_r = subset(l2_first_abx_r, contrast == "a")
+mean(l2_first_abx_a_r$rt)
+sd(l2_first_abx_a_r$rt)
+l2_first_abx_s_r = subset(l2_first_abx_r, contrast == "s")
+mean(l2_first_abx_s_r$rt)
+sd(l2_first_abx_s_r$rt)
+l2_first_abx_v_r = subset(l2_first_abx_r, contrast == "v")
+mean(l2_first_abx_v_r$rt)
+sd(l2_first_abx_v_r$rt)
+
+l2_first_lex_r = subset(l2_first_lex, answer == "1")
+avg = mean(l2_first_lex_r$rt)
+stdvar = sd(l2_first_lex_r$rt)
+upper_bound_pilot = avg + 2*stdvar
+lower_bound_pilot = avg - 2*stdvar
+l2_first_lex_r = subset(l2_first_lex_r, rt < upper_bound_pilot)
+nrow(l2_first_lex_r)
+
+l2_first_lex_a_r = subset(l2_first_lex_r, contrast == "a")
+mean(l2_first_lex_a_r$rt)
+sd(l2_first_lex_a_r$rt)
+l2_first_lex_s_r = subset(l2_first_lex_r, contrast == "s")
+mean(l2_first_lex_s_r$rt)
+sd(l2_first_lex_s_r$rt)
+l2_first_lex_v_r = subset(l2_first_lex_r, contrast == "v")
+mean(l2_first_lex_v_r$rt)
+sd(l2_first_lex_v_r$rt)
+
+
+
+l2_first_lex_a_r = subset(l2_first_lex_r, contrast == "a")
+l2_first_lex_s_r = subset(l2_first_lex_r, contrast == "s")
+l2_first_lex_v_r = subset(l2_first_lex_r, contrast == "v")
+
+
+l2_first_abx_a = subset(l2_first_abx, contrast == "a")
+l2_first_abx_s = subset(l2_first_abx, contrast == "s")
+l2_first_abx_v = subset(l2_first_abx, contrast == "v")
+
+l2_first_lex = subset(l2_first, expName != "abx")
+l2_first_lex_a = subset(l2_first_lex, contrast == "a")
+l2_first_lex_s = subset(l2_first_lex, contrast == "s")
+l2_first_lex_v = subset(l2_first_lex, contrast == "v")
+
+
+n_first = subset(first, language != "l2")
+n_first_abx = subset(n_first, expName == "abx")
+n_first_abx_a = subset(n_first_abx, contrast == "a")
+n_first_abx_s = subset(n_first_abx, contrast == "s")
+n_first_abx_v = subset(n_first_abx, contrast == "v")
+
+
+n_first_abx_r = subset(n_first_abx, answer == "1")
+avg = mean(n_first_abx_r$rt)
+stdvar = sd(n_first_abx_r$rt)
+upper_bound_pilot = avg + 2*stdvar
+lower_bound_pilot = avg - 2*stdvar
+n_first_abx_r = subset(n_first_abx_r, rt < upper_bound_pilot)
+n_first_abx_r = subset(n_first_abx_r, rt > lower_bound_pilot)
+nrow(n_first_abx_r)
+
+
+n_first_abx_a_r = subset(n_first_abx_r, contrast == "a")
+mean(n_first_abx_a_r$rt)
+sd(n_first_abx_a_r$rt)
+n_first_abx_s_r = subset(n_first_abx_r, contrast == "s")
+mean(n_first_abx_s_r$rt)
+sd(n_first_abx_s_r$rt)
+n_first_abx_v_r = subset(n_first_abx_r, contrast == "v")
+mean(n_first_abx_v_r$rt)
+sd(n_first_abx_v_r$rt)
+
+
+
+n_first_lex = subset(n_first, expName != "abx")
+n_first_lex_r = subset(n_first_lex, answer == "1")
+n_first_lex_a = subset(n_first_lex, contrast == "a")
+n_first_lex_s = subset(n_first_lex, contrast == "s")
+n_first_lex_v = subset(n_first_lex, contrast == "v")
+
+
+n_first_lex_r = subset(n_first_lex, answer == "1")
+avg = mean(n_first_lex_r$rt)
+stdvar = sd(n_first_lex_r$rt)
+upper_bound_pilot = avg + 2*stdvar
+lower_bound_pilot = avg - 2*stdvar
+n_first_lex_r = subset(n_first_lex_r, rt < upper_bound_pilot)
+n_first_lex_r = subset(n_first_lex_r, rt > lower_bound_pilot)
+nrow(n_first_lex_r)
+
+
+n_first_lex_a_r = subset(n_first_lex_r, contrast == "a")
+mean(n_first_lex_a_r$rt)
+sd(n_first_lex_a_r$rt)
+n_first_lex_s_r = subset(n_first_lex_r, contrast == "s")
+mean(n_first_lex_s_r$rt)
+sd(n_first_lex_s_r$rt)
+n_first_lex_v_r = subset(n_first_lex_r, contrast == "v")
+mean(n_first_lex_v_r$rt)
+sd(n_first_lex_v_r$rt)
+
+
+
+perc_correct_l2 = (sum(as.numeric(l2_first$answer)-1)/nrow(l2_first))*100
+perc_correct_l2 
+
+perc_correct_l2_abx = (sum(as.numeric(l2_first_abx$answer)-1)/nrow(l2_first_abx))*100
+perc_correct_l2_abx
+
+perc_correct_l2_abx_a = (sum(as.numeric(l2_first_abx_a$answer)-1)/nrow(l2_first_abx_a))*100
+perc_correct_l2_abx_a
+
+perc_correct_l2_abx_s = (sum(as.numeric(l2_first_abx_s$answer)-1)/nrow(l2_first_abx_s))*100
+perc_correct_l2_abx_s
+
+perc_correct_l2_abx_v = (sum(as.numeric(l2_first_abx_v$answer)-1)/nrow(l2_first_abx_v))*100
+perc_correct_l2_abx_v
+
+perc_correct_l2_lex = (sum(as.numeric(l2_first_lex$answer)-1)/nrow(l2_first_lex))*100
+perc_correct_l2_lex
+
+perc_correct_l2_lex_a = (sum(as.numeric(l2_first_lex_a$answer)-1)/nrow(l2_first_lex_a))*100
+perc_correct_l2_lex_a
+
+perc_correct_l2_lex_s = (sum(as.numeric(l2_first_lex_s$answer)-1)/nrow(l2_first_lex_s))*100
+perc_correct_l2_lex_s
+
+perc_correct_l2_lex_v = (sum(as.numeric(l2_first_lex_v$answer)-1)/nrow(l2_first_lex_v))*100
+perc_correct_l2_lex_v
+
+
+perc_correct_n = (sum(as.numeric(n_first$answer)-1)/nrow(n_first))*100
+perc_correct_n
+
+perc_correct_n_abx = (sum(as.numeric(n_first_abx$answer)-1)/nrow(n_first_abx))*100
+perc_correct_n_abx
+
+perc_correct_n_abx_a = (sum(as.numeric(n_first_abx_a$answer)-1)/nrow(n_first_abx_a))*100
+perc_correct_n_abx_a
+
+perc_correct_n_abx_s = (sum(as.numeric(n_first_abx_s$answer)-1)/nrow(n_first_abx_s))*100
+perc_correct_n_abx_s
+
+perc_correct_n_abx_v = (sum(as.numeric(n_first_abx_v$answer)-1)/nrow(n_first_abx_v))*100
+perc_correct_n_abx_v
+
+perc_correct_n_lex = (sum(as.numeric(n_first_lex$answer)-1)/nrow(n_first_lex))*100
+perc_correct_n_lex
+
+perc_correct_n_lex_a = (sum(as.numeric(n_first_lex_a$answer)-1)/nrow(n_first_lex_a))*100
+perc_correct_n_lex_a
+
+perc_correct_n_lex_s = (sum(as.numeric(n_first_lex_s$answer)-1)/nrow(n_first_lex_s))*100
+perc_correct_n_lex_s
+
+perc_correct_n_lex_v = (sum(as.numeric(n_first_lex_v$answer)-1)/nrow(n_first_lex_v))*100
+perc_correct_n_lex_v
+
+```
+Calculating RTs depending on the mora and contrast_location for the  contrasts of the abx (not shown in the paper). This is done just to make sure that the number of moras in the word and where the contrast is located does not affect the results. I am reading the data again just to make sure I don't use any data that was previously manipulated. 
+```{r}
+d= read.csv('matrix.csv', header=T)
+str(d)
+d$answer = as.factor(d$answer)
+d$item = as.factor(d$item)
+d$contrast_location = as.factor(d$contrast_location)
+d$moras = as.factor(d$moras)
+d$prof = as.factor(d$prof)
+
+
+#separating into in person and online. 
+second = subset(d, experimentType == "online")
+
+#separating into abx, lex, L2 for online. 
+abx = subset(second, expName=="abx")
+lex = subset(second, expName=="lex")
+l2 = subset(second, language=="l2")
+abx_l2 = subset(l2, expName=="abx")
+lex_l2 = subset(l2, expName=="lex")
+
+
+#trimming it 
+abx_trimmed = subset(abx, answer == "1")
+abx_trimmed = subset(abx_trimmed, abx_trimmed$rt < upper_bound)
+abx_trimmed_l2 = subset(abx_trimmed, language == "l2")
+
+
+
+lex_trimmed = subset(lex, answer == "1")
+lex_trimmed = subset(lex, lex_trimmed$rt < upper_bound)
+lex_trimmed = subset(lex, lex$rt < upper_bound)
+lex_trimmed_l2 = subset(lex_trimmed, language == "l2")
+
+
+#subsetting contrast type
+#vowel contrast of the abx 
+abx_v = subset(abx_trimmed, contrast=="v")
+abx_v_l2 = subset(abx_trimmed_l2, contrast=="v")
+
+#accent contrast of the abx 
+abx_a = subset(abx_trimmed, contrast=="a")
+abx_a_l2 = subset(abx_trimmed_l2, contrast=="a")
+
+#stop contrast for the abx 
+abx_s = subset(abx_trimmed, contrast=="s")
+abx_s_l2 = subset(abx_trimmed_l2, contrast=="s")
+
+#vowel contrast of the lex 
+lex_v = subset(lex_trimmed, contrast=="v")
+#accent contrast of the lex 
+lex_a = subset(lex_trimmed, contrast=="a")
+#stop contrast of the lex 
+lex_s = subset(lex_trimmed, contrast=="s")
+```
+Doing inferential stats based on where the contrast is and the number of moras (reaction time). 
+```{r}
+
+#vowel contrast
+reg_abx_v = lmer(rt~language+contrast_location+moras+ (1|participant) + (1|item),  data=abx_v)
+#mixed(reg_abx_v, abx_v) #does not work
+
+#reaction times depending on the mora and contrast_location for the accent contrast of the abx 
+abx_a = abx_a[!grepl("kaERU", abx_a$word),]
+abx_a = abx_a[!grepl("KAeru", abx_a$word),]
+abx_a = abx_a[!grepl("KUrasu", abx_a$word),]
+abx_a = abx_a[!grepl("kuRASU", abx_a$word),]
+reg_abx_a = lmer(rt~language+contrast_location+moras +  (1|participant) + (1|item),  data=abx_a) 
+mixed(reg_abx_a, abx_a)
+
+#reaction times depending on the mora and contrast_location for the stop contrast of the abx 
+reg_abx_s = lmer(rt~language+  moras +  (1|participant) + (1|item),  data=abx_s) 
+mixed(reg_abx_s, abx_s)
+```
+Now doing the logistic regressions for accuracy. 
+```{r}
+#acc depending on the mora and contrast_location for the vowel contrast of the lex 
+log_reg_lex_v =  glmer(answer~language+contrast_location+moras  + (1|participant) + (1|item),  data=lex_v, family=binomial) 
+mixed(log_reg_lex_v,  lex_v, method="LRT", family=binomial)
+
+#acc depending on the mora and contrast_location for the accent contrast of the lex 
+lex_a = lex_a[!grepl("kaERU", lex_a$word),]
+lex_a = lex_a[!grepl("Kaeru", lex_a$word),]
+lex_a = lex_a[!grepl("KUrasu", lex_a$word),]
+lex_a = lex_a[!grepl("kuRASU", lex_a$word),]
+log_reg_lex_a =  glmer(answer~contrast_location  + (1|participant) +(1|item),  data=lex_a, family=binomial) 
+mixed(log_reg_lex_a,  lex_a, method="LRT", family=binomial)
+
+
+#acc depending on the mora and contrast_location for the stop contrast of the lex 
+log_reg_lex_s =  glmer(answer~language+moras  + (1|participant) + (1|item),  data=lex_s, family=binomial) 
+mixed(log_reg_lex_s,  lex_s, method="LRT", family=binomial)
+
+#profficiency 
+log_reg_lex =  glmer(answer~prof + (1|item) + (1|participant),  data=lex_l2, family=binomial) 
+mixed(log_reg_lex,  lex_trimmed_l2, method="LRT", family=binomial)
+
+reg_lex = lmer(rt~prof + (1|item) + (1|participant),  data=lex_trimmed_l2) 
+mixed(reg_lex,  lex_trimmed_l2)
+
+
+reg_abx= lmer(rt~prof+ (1|participant) + (1|item),  data=abx_trimmed_l2) 
+mixed(reg_abx, abx_trimmed_l2)
+emmeans(reg_abx, list(pairwise~prof))
+
+log_reg_abx =  glmer(answer~prof + (1|item) + (1|participant),  data=abx_l2, family=binomial) 
+mixed(log_reg_abx,  abx_l2, method="LRT", family=binomial)
+
+
+```
+Plotting graphs. 
+```{r}
+
+abx_trimmed$contrast <- as.character(abx_trimmed$contrast)
+abx_trimmed$contrast[abx_trimmed$contrast == "a"] <- "accent"
+abx_trimmed$contrast[abx_trimmed$contrast == "v"] <- "vowel"
+abx_trimmed$contrast[abx_trimmed$contrast == "s"] <- "stop"
+
+
+lex_trimmed$contrast <- as.character(lex_trimmed$contrast)
+lex_trimmed$contrast[lex_trimmed$contrast == "a"] <- "accent"
+lex_trimmed$contrast[lex_trimmed$contrast == "v"] <- "vowel"
+lex_trimmed$contrast[lex_trimmed$contrast == "s"] <- "stop"
+
+
+
+ggplot(data=lex_trimmed, aes(x=language, y=log(rt), fill=contrast)) + geom_violin(trim=FALSE) +
+stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3,show.legend = FALSE, position = position_dodge(width = .75))+
+scale_fill_brewer(palette="OrRd")+
+labs(y="Logs of RTs",x="Language group")+
+  stat_summary(fun.y=mean, colour="darkred", geom="text", 
+               vjust=-0.75, aes( label=round(..y.., digits=3)),
+               position = position_dodge(width = .75))
+
+
+ggplot(data=abx_trimmed, aes(x=language, y=log(rt), fill=contrast)) + geom_violin(trim=FALSE) +
+stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3,show.legend = FALSE, position = position_dodge(width = .75))+
+scale_fill_brewer(palette="OrRd")+
+labs(y="Logs of RTs",x="Language group")+
+  stat_summary(fun.y=mean, colour="darkred", geom="text", 
+               vjust=-0.75, aes( label=round(..y.., digits=3)),
+               position = position_dodge(width = .75))
+
+d= read.csv('matrix.csv', header=T)
+d$contrast <- as.character(d$contrast)
+d$contrast[d$contrast == "a"] <- "accent"
+d$contrast[d$contrast == "v"] <- "vowel"
+d$contrast[d$contrast == "s"] <- "stop"
+first = subset(d, experimentType == "online")
+
+abx = subset(first, expName=="abx")
+lex = subset(first, expName=="lex")
+
+abx_plot = aggregate(answer~language+contrast+participant,data=abx,FUN=mean)
+abx_plot$answer = abx_plot$answer*100
+
+lex_plot = aggregate(answer~language+contrast+participant,data=lex,FUN=mean)
+lex_plot$answer = lex_plot$answer*100
+
+#graph for the abx
+
+ggplot(data=abx_plot, aes(y = answer, x = language, fill = contrast)) + geom_boxplot(alpha=0.7) +
+stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3,show.legend = FALSE, position = position_dodge(width = .75))+
+scale_fill_brewer(palette="OrRd")+
+labs(y="Accuracy",x="Language group")+
+stat_summary(fun.y=mean, colour="darkred", geom="text", 
+               vjust=-0.75, aes( label=round(..y.., digits=3)),
+               position = position_dodge(width = .75))+ 
+  ggtitle("ABX task: accuracy (%) vs. language group")
+
+
+#graph for the lex
+ggplot(data=lex_plot, aes(y = answer, x = language, fill = contrast)) + geom_boxplot(alpha=0.7) +
+stat_summary(fun.y=mean, colour="darkred", geom="point", 
+                   shape=18, size=3,show.legend = FALSE, position = position_dodge(width = .75))+
+scale_fill_brewer(palette="OrRd")+
+labs(y="Accuracy",x="Language group")+
+stat_summary(fun.y=mean, colour="darkred", geom="text", 
+               vjust=-0.75, aes( label=round(..y.., digits=3)),
+               position = position_dodge(width = .75))+
+    ggtitle("Lexical assignment task: accuracy (%) vs. language group")
+               
+               
+```
