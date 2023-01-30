@@ -6,8 +6,8 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
-setwd("/Users/marcofonseca/Library/Mobile Documents/com~apple~CloudDocs/Phonetica/analysis")
+#sent your work directory here
+#setwd("")
 
 library(lme4)
 library(ggplot2)
