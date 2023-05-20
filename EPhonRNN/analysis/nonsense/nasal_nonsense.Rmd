@@ -1,0 +1,189 @@
+---
+title: "Nasal asssimilation analysis - English monolingual"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+results_folder <- '/Users/marcofonseca/Documents/PhonRNN/EPhonRNN/results/'
+
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+library(ggfortify)
+library(rstatix)
+library(nortest)
+library(tseries)
+library(qqplotr)
+library(DescTools)
+library(FSA)
+library(PMCMRplus)
+library(AICcmodavg)
+library(emmeans)
+
+
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir='/Users/marcofonseca/Documents/PhonRNN/EPhonRNN/analysis/')
+```
+Opening and files and subsetting them.
+```{r}
+eval_data = read.csv(paste0(results_folder, "nasal_eval.csv"))
+
+
+
+#changing numbers to more meaningful names
+eval_data["v_or_c"][eval_data["v_or_c"] == 0] <- "cons."
+eval_data["v_or_c"][eval_data["v_or_c"] == 5] <- "vowel"
+
+eval_data["nasal"][eval_data["nasal"] == 1] <- "m"
+eval_data["nasal"][eval_data["nasal"] == 2] <- "n"
+eval_data["nasal"][eval_data["nasal"] == 3] <- "ɲ"
+eval_data["nasal"][eval_data["nasal"] == 4] <- "ŋ"
+
+eval_data["nasal"][eval_data["nasal"] == 6] <- "a"
+eval_data["nasal"][eval_data["nasal"] == 7] <- "i"
+eval_data["nasal"][eval_data["nasal"] == 8] <- "e"
+eval_data["nasal"][eval_data["nasal"] == 9] <- "o"
+eval_data["nasal"][eval_data["nasal"] == 10] <- "ɯ"
+
+eval_data["following"][eval_data["following"] == 11] <- "ã"
+eval_data["following"][eval_data["following"] == 12] <- "ĩ"
+eval_data["following"][eval_data["following"] == 13] <- "ẽ"
+eval_data["following"][eval_data["following"] == 14] <- "õ"
+eval_data["following"][eval_data["following"] == 15] <- "ũ"
+
+eval_data["following"][eval_data["following"] == 16] <- "labial"
+eval_data["following"][eval_data["following"] == 17] <- "coronal"
+eval_data["following"][eval_data["following"] == 18] <- "palatal"
+eval_data["following"][eval_data["following"] == 19] <- "velar"
+
+eval_data= eval_data[- grep(20, eval_data$nasal),] #deleteing velar nasals bc I could not deal with them 
+
+
+eval_data$following <- as.factor(eval_data$following)  # Convert character column to factor
+eval_data$nasal <- as.factor(eval_data$nasal)  # Convert character column to factor
+str(eval_data)
+
+
+cons <- eval_data[eval_data$v_or_c == "cons.", ]
+vs <- eval_data[eval_data$v_or_c == "vowel", ]
+
+
+```
+Plotting data 
+
+```{r}
+ggplot(cons) +
+  geom_boxplot(aes(x=nasal, y=loss_mean, color=following))+
+  xlab("Nasal consonant")+
+  ylab("Average log  likelihood")+
+   ggtitle("Average log likelihoods per nasal consonant and following sound\n Word set: test (19343 nonsense words)")+
+  scale_color_brewer(name = "Following sound", palette="Dark2") 
+  
+ggplot(vs) +
+  geom_boxplot(aes(x=nasal, y=loss_mean, color=following))+
+  xlab("Vowel")+
+  ylab("Average log  likelihood")+
+   ggtitle("Average log likelihoods per vowel and following sound\n Word set: test (24434 nonsense words)")+
+  scale_color_brewer(name = "Following sound", palette="Dark2") 
+  
+```
+
+Descriptive stats. 
+```{r}
+
+cons  %>%
+  group_by(nasal, following) %>%
+  get_summary_stats(loss_mean, type = "mean_sd")
+
+vs  %>%
+  group_by(nasal, following) %>%
+  get_summary_stats(loss_mean, type = "mean_sd")
+
+
+```
+Another way of showing descriptive stats. 
+n – The number of observations for each treatment.
+mean – The mean value for each treatment.
+sd – The standard deviation of each treatment.
+stderr – The standard error of each treatment.  That is the standard deviation / sqrt (n).
+LCL, UCL – The upper and lower confidence intervals of the mean.  That is to say, you can be 95% certain that the true mean falls between the lower and upper values specified for each treatment group assuming a normal distribution. 
+median – The median value for each treatment.
+min, max – The minimum and maximum value for each treatment. 
+IQR – The inner quartile range of each treatment. That is the 75th percentile –  25th percentile.
+LCLmed, UCLmed – The 95% confidence interval for the median.
+```{r}
+cons %>% select(nasal, following, loss_mean) %>% group_by(nasal, following) %>% 
+  summarise(n=n(), 
+            mean=mean(loss_mean, na.rm = FALSE), 
+            sd=sd(loss_mean, na.rm = FALSE),
+            stderr=sd/sqrt(n),
+            LCL = mean - qt(1 - (0.05 / 2), n - 1) * stderr,
+            UCL = mean + qt(1 - (0.05 / 2), n - 1) * stderr,
+            median=median(loss_mean, na.rm = FALSE),
+            min=min(loss_mean, na.rm = FALSE), 
+            max=max(loss_mean, na.rm = FALSE),
+            IQR=IQR(loss_mean, na.rm = FALSE),
+            LCLmed = MedianCI(loss_mean, na.rm=FALSE)[2],
+            UCLmed = MedianCI(loss_mean, na.rm=FALSE)[3])
+
+vs %>% select(nasal, following, loss_mean) %>% group_by(nasal, following) %>% 
+  summarise(n=n(), 
+            mean=mean(loss_mean, na.rm = FALSE), 
+            sd=sd(loss_mean, na.rm = FALSE),
+            stderr=sd/sqrt(n),
+            LCL = mean - qt(1 - (0.05 / 2), n - 1) * stderr,
+            UCL = mean + qt(1 - (0.05 / 2), n - 1) * stderr,
+            median=median(loss_mean, na.rm = FALSE),
+            min=min(loss_mean, na.rm = FALSE), 
+            max=max(loss_mean, na.rm = FALSE),
+            IQR=IQR(loss_mean, na.rm = FALSE),
+            LCLmed = MedianCI(loss_mean, na.rm=FALSE)[2],
+            UCLmed = MedianCI(loss_mean, na.rm=FALSE)[3])
+```
+
+
+
+Checking for outliers: there is only one, I will keep it since its low likelihood is expected ( n+ velar). 
+
+```{r}
+outs <- eval_data %>% 
+  group_by(following) %>%
+  identify_outliers(loss_mean)
+```
+
+Inferential stats.
+```{r}
+
+model1 <- lm(log(-1*loss_mean) ~ nasal*following, data = cons)
+model2 <- lm(log(-1*loss_mean)  ~ nasal+following, data = cons)
+
+
+model.set <- list(model1, model2)
+model.names <- c("int", "2way")
+
+aictab(model.set, model.names)
+autoplot(model1)
+
+summary(model1)
+emmeans(model1, list(pairwise~nasal*following))
+
+model3 <- lm(log(-1*loss_mean) ~ nasal*following, data = vs)
+model4 <- lm(log(-1*loss_mean) ~ nasal+following, data = vs)
+model.set <- list(model3, model4)
+model.names <- c("int", "2way")
+aictab(model.set, model.names)
+autoplot(model3)
+summary(model3)
+emmeans(model3, list(pairwise~nasal*following))
+
+
+```
+
+
+
+

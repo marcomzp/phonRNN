@@ -1,0 +1,170 @@
+---
+title: "Loanword geminate devoicing analysis - English monolingual corpus"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+results_folder <- '/Users/marcofonseca/Documents/PhonRNN/EPhonRNN/results/'
+
+library(ggplot2)
+library(dplyr)
+library(ggpubr)
+library(ggfortify)
+library(rstatix)
+library(nortest)
+library(tseries)
+library(qqplotr)
+library(DescTools)
+library(FSA)
+library(PMCMRplus)
+library(tidyverse)
+library(broom)
+library(AICcmodavg)
+library(multcomp)
+library(emmeans)
+
+
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir='/Users/marcofonseca/Documents/PhonRNN/EPhonRNN/analysis/')
+```
+Reading and subsetting data. 
+```{r}
+eval_data = read.csv(paste0(results_folder, "geminates_eval.csv"))
+
+#changing numbers to more meaningful names
+eval_data["gem"][eval_data["gem"] == 0] <- "vcl. sing."
+eval_data["gem"][eval_data["gem"] == 1] <- "vcd. sing."
+eval_data["gem"][eval_data["gem"] == 2] <- "vcl. gem."
+eval_data["gem"][eval_data["gem"] == 3] <- "vcd. gem."
+
+eval_data["dist"][eval_data["dist"] == 1] <- "adj."
+eval_data["dist"][eval_data["dist"] == 2] <- "far"
+eval_data= eval_data[- grep("vcd. sing.", eval_data$gem),] #deleting singletons. 
+eval_data= eval_data[- grep("vcl. sing.", eval_data$gem),] 
+
+
+eval_data$gem <- as.factor(eval_data$gem)  # Convert character column to factor
+eval_data$dist <- as.factor(eval_data$dist) 
+eval_data$n_syll <- as.factor(eval_data$n_syll)  # Convert character column to factor
+eval_data$n_obs <- as.factor(eval_data$n_obs) 
+
+dist_data = eval_data[eval_data$dist %in% c('adj.', 'far'), ]
+dist_data = dist_data[dist_data$gem %in% c('vcd. gem.', 'vcl. gem.'), ]
+```
+Plotting data 
+
+```{r}
+ggplot(eval_data) +
+  geom_boxplot(aes(x=n_obs, y=loss_mean, color=gem))+
+  xlab("N. of obstruents in the word")+
+  ylab("Average log  likelihood")+
+   ggtitle("Average log likelihoods per geminate voicing \n and n. of obstruents in the word\n Word set: test (27797 nonsense words)")+
+  scale_color_brewer(name = "Geminate voicing", palette="Dark2") 
+  
+
+ggplot(dist_data) +
+  geom_boxplot(aes(x=dist, y=loss_mean, color=gem))+
+  xlab("N. of obstruents in the word")+
+  ylab("Average log  likelihood")+
+   ggtitle("Average log likelihoods per geminate voicing \n and distance of the voiced obstruent\n Word set: test (13489 nonsense words)")+
+  scale_color_brewer(name = "Geminate voicing", palette="Dark2") 
+
+```
+Descriptive stats
+```{r}
+eval_data  %>%
+  group_by(gem, n_obs) %>%
+  get_summary_stats(loss_mean, type = "mean_sd")
+
+eval_data  %>%
+  group_by(gem) %>%
+  get_summary_stats(loss_mean, type = "mean_sd")
+
+dist_data  %>%
+  group_by(dist, gem) %>%
+  get_summary_stats(loss_mean, type = "mean_sd")
+
+descriptive_stats = eval_data %>% dplyr::select(gem, n_obs, loss_mean) %>% group_by(gem, n_obs) %>% 
+  summarise(n=n(), 
+            mean=mean(loss_mean, na.rm = FALSE), 
+            sd=sd(loss_mean, na.rm = FALSE),
+            stderr=sd/sqrt(n),
+            LCL = mean - qt(1 - (0.05 / 2), n - 1) * stderr,
+            UCL = mean + qt(1 - (0.05 / 2), n - 1) * stderr,
+            median=median(loss_mean, na.rm = FALSE),
+            min=min(loss_mean, na.rm = FALSE), 
+            max=max(loss_mean, na.rm = FALSE),
+            IQR=IQR(loss_mean, na.rm = FALSE),
+            LCLmed = MedianCI(loss_mean, na.rm=FALSE)[2],
+            UCLmed = MedianCI(loss_mean, na.rm=FALSE)[3])
+
+descriptive_stats
+
+descriptive_stats = dist_data %>% dplyr::select(dist, gem, loss_mean) %>% group_by(dist, gem) %>% 
+  summarise(n=n(), 
+            mean=mean(loss_mean, na.rm = FALSE), 
+            sd=sd(loss_mean, na.rm = FALSE),
+            stderr=sd/sqrt(n),
+            LCL = mean - qt(1 - (0.05 / 2), n - 1) * stderr,
+            UCL = mean + qt(1 - (0.05 / 2), n - 1) * stderr,
+            median=median(loss_mean, na.rm = FALSE),
+            min=min(loss_mean, na.rm = FALSE), 
+            max=max(loss_mean, na.rm = FALSE),
+            IQR=IQR(loss_mean, na.rm = FALSE),
+            LCLmed = MedianCI(loss_mean, na.rm=FALSE)[2],
+            UCLmed = MedianCI(loss_mean, na.rm=FALSE)[3])
+
+descriptive_stats
+
+```
+
+Checking for outliers
+```{r}
+outs <- eval_data %>% 
+  group_by(n_obs) %>%
+  identify_outliers(loss_mean)
+
+outs2 <- eval_data %>% 
+  group_by(gem) %>%
+  identify_outliers(loss_mean)
+
+outs3 <- dist_data %>% 
+  group_by(dist) %>%
+  identify_outliers(loss_mean)
+```
+
+No extreme outliers were found. 
+Doing descriptive stats.
+
+```{r}
+model1 <- lm(loss_mean ~ gem*n_obs, data = eval_data)
+model2 <- lm(loss_mean ~ gem+n_obs, data = eval_data)
+model3 <- lm(loss_mean ~ gem, data = eval_data)
+model.set <- list(model1, model2, model3)
+model.names <- c("int", "2way", "1way")
+aictab(model.set, model.names)
+autoplot(model1) #this model had smallest AIC
+summary(model1)
+emmeans(model1, list(pairwise~gem*n_obs))
+
+
+
+
+model3 <- lm(loss_mean ~ dist*gem, data = dist_data)
+model4 <- lm(loss_mean ~ dist+gem, data = dist_data)
+
+model.set2 <- list(model3, model4)
+model.names2 <- c("int", "2way")
+aictab(model.set2, model.names2)
+autoplot(model3)
+summary(model3)
+emmeans(model3, list(pairwise~dist*gem))
+
+
+```
+
+
